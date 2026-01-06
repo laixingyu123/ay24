@@ -712,9 +712,9 @@ class AnyRouterSignIn {
 
 				// 检测出售令牌的已使用额度是否有变化，如果有变化则同步更新服务端
 				if (accountInfo && accountInfo.tokens && Array.isArray(accountInfo.tokens)) {
-					// 筛选出售令牌（名称以"出售_"开头且有key的令牌）
+					// 筛选出售令牌（名称以"出售_"开头或is_sold=true，且有key的令牌）
 					const sellTokenConfigs = accountInfo.tokens.filter(
-						(t) => t.name && t.name.startsWith('出售_') && t.key
+						(t) => ((t.name && t.name.startsWith('出售_')) || t.is_sold === true) && t.key
 					);
 
 					for (const configToken of sellTokenConfigs) {
@@ -726,12 +726,21 @@ class AnyRouterSignIn {
 						if (currentToken) {
 							const oldUsedQuota = configToken.used_quota || 0;
 							const newUsedQuota = currentToken.used_quota || 0;
+							const isSold = configToken.is_sold === true;
 
-							// 检查已使用额度是否有变化
-							if (newUsedQuota !== oldUsedQuota) {
-								console.log(
-									`[令牌管理] 出售令牌 ${configToken.name} 已使用额度变化: ${oldUsedQuota} -> ${newUsedQuota}`
-								);
+							// 检查已使用额度是否有变化，或者是已售出令牌（需要强制更新）
+							if (newUsedQuota !== oldUsedQuota || isSold) {
+								const logPrefix = isSold
+									? `[令牌管理] 已售出令牌 ${configToken.name}`
+									: `[令牌管理] 出售令牌 ${configToken.name}`;
+
+								if (newUsedQuota !== oldUsedQuota) {
+									console.log(
+										`${logPrefix} 已使用额度变化: ${oldUsedQuota} -> ${newUsedQuota}`
+									);
+								} else {
+									console.log(`${logPrefix} 强制更新额度信息`);
+								}
 
 								const keyUpdateResult = await updateKeyInfo({
 									key: configToken.key,
@@ -744,11 +753,9 @@ class AnyRouterSignIn {
 								});
 
 								if (keyUpdateResult.success) {
-									console.log(`[令牌管理] 出售令牌 ${configToken.name} 服务端信息同步成功`);
+									console.log(`${logPrefix} 服务端信息同步成功`);
 								} else {
-									console.log(
-										`[令牌管理] 出售令牌 ${configToken.name} 服务端信息同步失败: ${keyUpdateResult.error}`
-									);
+									console.log(`${logPrefix} 服务端信息同步失败: ${keyUpdateResult.error}`);
 								}
 							}
 						}
